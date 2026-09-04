@@ -391,7 +391,6 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = get_text("welcome", name=user.first_name) + "\n\n" + get_text("no_subscription")
         await update.message.reply_text(msg, reply_markup=reply_markup)
     else:
-        # Load custom buttons
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM buttons WHERE enabled = 1 ORDER BY sort_order ASC")
@@ -446,7 +445,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     data = query.data
 
-    # Check block status
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT status FROM users WHERE user_id = ?", (user.id,))
@@ -509,7 +507,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("❌ برای ثبت سفارش نیاز به اشتراک فعال دارید.")
             return
             
-        # Check daily limit
         daily_limit = int(get_setting("daily_order_limit") or "3")
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -567,7 +564,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "menu_noop":
         pass
 
-# Message Handler for Phone Input or Conversation Input
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     text = update.message.text
@@ -598,7 +594,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await update.message.reply_text(get_text("order_created", order_id=order_id))
             
-            # Notify Admins
             conn = get_db_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT user_id FROM admins")
@@ -748,6 +743,83 @@ async def admin_callback_router(update: Update, context: ContextTypes.DEFAULT_TY
         keyboard = [[InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_home")]]
         await query.edit_message_text(stats_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
+    elif data == "adm_users":
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id, username, first_name, status FROM users ORDER BY joined_at DESC LIMIT 10")
+        users_list = cursor.fetchall()
+        conn.close()
+        
+        text = "👥 **مدیریت کاربران (آخرین 10 کاربر):**\n\n"
+        for u in users_list:
+            text += f"🆔 `{u['user_id']}` | @{u['username'] or 'ندارد'} | {u['first_name'] or ''} | وضعیت: `{u['status']}`\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_home")]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif data == "adm_orders":
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT order_id, user_id, status, created_at FROM orders ORDER BY created_at DESC LIMIT 10")
+        orders_list = cursor.fetchall()
+        conn.close()
+        
+        text = "📦 **مدیریت سفارش‌ها (آخرین 10 سفارش):**\n\n"
+        for o in orders_list:
+            text += f"🔹 کد: `{o['order_id']}` | کاربر: `{o['user_id']}` | وضعیت: `{o['status']}`\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_home")]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif data == "adm_tickets":
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT ticket_id, user_id, status FROM tickets ORDER BY created_at DESC LIMIT 10")
+        tickets_list = cursor.fetchall()
+        conn.close()
+        
+        text = "🎫 **مدیریت تیکت‌ها:**\n\n"
+        if not tickets_list:
+            text += "هیچ تیکتی ثبت نشده است."
+        for t in tickets_list:
+            text += f"🔸 شماره: `{t['ticket_id']}` | کاربر: `{t['user_id']}` | وضعیت: `{t['status']}`\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_home")]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif data == "adm_buttons":
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM buttons ORDER BY sort_order ASC")
+        btns = cursor.fetchall()
+        conn.close()
+        
+        text = "⚙️ **مدیریت دکمه‌های منوی اصلی:**\n\n"
+        for b in btns:
+            status_emoji = "🟢" if b["enabled"] == 1 else "🔴"
+            text += f"{status_emoji} `{b['label']}` (Action: `{b['action']}`)\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_home")]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif data == "adm_texts":
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT key FROM texts")
+        txts = cursor.fetchall()
+        conn.close()
+        
+        text = "📝 **مدیریت متن‌های پیش‌فرض سیستم:**\n\n کلیدهای موجود در دیتابیس:\n"
+        for t in txts:
+            text += f"🔹 `{t['key']}`\n"
+        
+        keyboard = [[InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_home")]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+
+    elif data == "adm_broadcast":
+        keyboard = [[InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_home")]]
+        await query.edit_message_text("📢 بخش ارسال همگانی پیام به کاربران.", reply_markup=InlineKeyboardMarkup(keyboard))
+
     elif data.startswith("adm_ord_done_") or data.startswith("adm_ord_prog_") or data.startswith("adm_ord_rej_"):
         parts = data.split("_")
         action_type = parts[2]
@@ -781,7 +853,6 @@ async def admin_callback_router(update: Update, context: ContextTypes.DEFAULT_TY
         log_action("update_order_status", user.id, f"Order {order_id} set to {new_status}")
         await query.message.reply_text(f"✅ وضعیت سفارش {order_id} به {new_status} تغییر یافت.")
         
-        # Notify user
         try:
             if new_status == 'done':
                 await context.bot.send_message(order["user_id"], get_text("order_done", order_id=order_id))
@@ -799,12 +870,10 @@ async def admin_callback_router(update: Update, context: ContextTypes.DEFAULT_TY
 
     elif data == "adm_bk_download":
         try:
-            # Checkpoint sqlite
             conn = get_db_connection()
             conn.execute("PRAGMA wal_checkpoint(FULL);")
             conn.close()
             
-            # Create zip in memory / temp file
             tmp_fd, tmp_path = tempfile.mkstemp(suffix=".zip")
             os.close(tmp_fd)
             
@@ -812,7 +881,6 @@ async def admin_callback_router(update: Update, context: ContextTypes.DEFAULT_TY
                 if os.path.exists(DB_PATH):
                     zf.write(DB_PATH, arcname="bot.sqlite3")
                 
-                # Metadata
                 with open(DB_PATH, "rb") as f:
                     db_hash = hashlib.sha256(f.read()).hexdigest()
                     
@@ -861,11 +929,6 @@ async def admin_callback_router(update: Update, context: ContextTypes.DEFAULT_TY
         keyboard = [[InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_home")]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
-    elif data == "adm_users" or data == "adm_orders" or data == "adm_tickets" or data == "adm_buttons" or data == "adm_texts" or data == "adm_broadcast":
-        # Handled cleanly with generic placeholders / lists
-        keyboard = [[InlineKeyboardButton("🔙 بازگشت به پنل", callback_data="adm_home")]]
-        await query.edit_message_text("🚧 این بخش از پنل مدیریت در حال حاضر فعال و متصل است.", reply_markup=InlineKeyboardMarkup(keyboard))
-
 # ------------------------------------------------------------------------------
 # APPLICATION SETUP & MAIN
 # ------------------------------------------------------------------------------
@@ -874,10 +937,8 @@ def main():
         logger.critical("Bot token is missing. Exiting.")
         return
 
-    # Build Application
     application = Application.builder().token(BOT_TOKEN).build()
 
-    # Handlers
     application.add_handler(CommandHandler("start", cmd_start))
     application.add_handler(CommandHandler("admin", cmd_admin))
     application.add_handler(CommandHandler("id", cmd_id))
@@ -888,7 +949,6 @@ def main():
     
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Global Error Handler
     async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Exception while handling an update: {context.error}")
         try:
